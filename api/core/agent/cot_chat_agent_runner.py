@@ -84,7 +84,11 @@ class CotChatAgentRunner(CotAgentRunner):
             for unit in agent_scratchpad:
                 if unit.is_final():
                     assert isinstance(assistant_message.content, str)
-                    assistant_message.content += f"Final Answer: {unit.agent_response}"
+                    # Check if we already have a "Final Answer:" format
+                    if unit.agent_response and "Final Answer:" in unit.agent_response:
+                        assistant_message.content += unit.agent_response
+                    else:
+                        assistant_message.content += f"Final Answer: {unit.agent_response}"
                 else:
                     assert isinstance(assistant_message.content, str)
                     assistant_message.content += f"Thought: {unit.thought}\n\n"

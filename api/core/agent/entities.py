@@ -59,6 +59,11 @@ class AgentScratchpadUnit(BaseModel):
         """
         Check if the scratchpad unit is final.
         """
+        # Check for text-based "Final Answer:" format
+        if self.agent_response and "Final Answer:" in self.agent_response:
+            return True
+        
+        # Check for JSON-based Final Answer format
         return self.action is None or (
             "final" in self.action.action_name.lower() and "answer" in self.action.action_name.lower()
         )

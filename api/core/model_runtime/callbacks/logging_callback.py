@@ -57,13 +57,14 @@ class LoggingCallback(Callback):
         if user:
             self.print_text(f"User: {user}\n", color="blue")
 
-        self.print_text("Prompt messages:\n", color="blue")
-        for prompt_message in prompt_messages:
+        self.print_text("\nPrompt messages:\n\n", color="blue")
+        for i, prompt_message in enumerate(prompt_messages, start=1):
+            self.print_text(f" --- Message {i}:\n", color="blue")
             if prompt_message.name:
                 self.print_text(f"\tname: {prompt_message.name}\n", color="blue")
 
-            self.print_text(f"\trole: {prompt_message.role.value}\n", color="blue")
-            self.print_text(f"\tcontent: {prompt_message.content}\n", color="blue")
+            self.print_text(f"  ---- role: {prompt_message.role.value}\n", color="blue")
+            self.print_text(f"  ---- content: \n{prompt_message.content}\n\n", color="blue")
 
         if stream:
             self.print_text("\n[on_llm_new_chunk]")

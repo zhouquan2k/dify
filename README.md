@@ -1,3 +1,14 @@
+# Run
+## frontend:
+cd web
+npm run dev
+
+## backend:
+cd api
+# poetry run python app.py
+uv run flask run --host 0.0.0.0 --port=5001 --debug
+
+
 ![cover-v5-optimized](https://github.com/langgenius/dify/assets/13230914/f9e19af5-61ba-4119-b926-d10c4c06ebab)
 
 <p align="center">

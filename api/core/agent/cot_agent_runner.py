@@ -135,6 +135,9 @@ class CotAgentRunner(BaseAgentRunner, ABC):
                     QueueAgentThoughtEvent(agent_thought_id=agent_thought.id), PublishFrom.APPLICATION_MANAGER
                 )
 
+            found_final_answer = False
+            accumulated_final_answer = ""
+
             for chunk in react_chunks:
                 if isinstance(chunk, AgentScratchpadUnit.Action):
                     action = chunk
@@ -144,16 +147,49 @@ class CotAgentRunner(BaseAgentRunner, ABC):
                     scratchpad.action_str = json.dumps(chunk.model_dump())
                     scratchpad.action = action
                 else:
-                    assert scratchpad.agent_response is not None
-                    scratchpad.agent_response += chunk
-                    assert scratchpad.thought is not None
-                    scratchpad.thought += chunk
-                    yield LLMResultChunk(
-                        model=self.model_config.model,
-                        prompt_messages=prompt_messages,
-                        system_fingerprint="",
-                        delta=LLMResultChunkDelta(index=0, message=AssistantPromptMessage(content=chunk), usage=None),
-                    )
+                    # Check if chunk contains the start of a Final Answer
+                    if "Final Answer:" in chunk and not found_final_answer:
+                        found_final_answer = True
+                        # Extract the part after "Final Answer:"
+                        final_answer_parts = chunk.split("Final Answer:", 1)
+                        if len(final_answer_parts) > 1:
+                            # The text before "Final Answer:" is still thought
+                            thought_part = final_answer_parts[0]
+                            answer_part = final_answer_parts[1]
+                            
+                            # Add the thought part to the thought
+                            assert scratchpad.agent_response is not None
+                            scratchpad.agent_response += thought_part
+                            assert scratchpad.thought is not None
+                            scratchpad.thought += thought_part
+                            # Stream the thought part
+                            yield LLMResultChunk(
+                                model=self.model_config.model,
+                                prompt_messages=prompt_messages,
+                                system_fingerprint="",
+                                delta=LLMResultChunkDelta(index=0, message=AssistantPromptMessage(content=thought_part), usage=None),
+                            )
+                            
+                            # Start collecting the answer part
+                            accumulated_final_answer = answer_part
+                        else:
+                            # Unlikely, but handle the case where there's nothing after "Final Answer:"
+                            accumulated_final_answer = ""
+                    elif found_final_answer:
+                        # Continue collecting the final answer
+                        accumulated_final_answer += chunk
+                    else:
+                        # Normal thought processing
+                        assert scratchpad.agent_response is not None
+                        scratchpad.agent_response += chunk
+                        assert scratchpad.thought is not None
+                        scratchpad.thought += chunk
+                        yield LLMResultChunk(
+                            model=self.model_config.model,
+                            prompt_messages=prompt_messages,
+                            system_fingerprint="",
+                            delta=LLMResultChunkDelta(index=0, message=AssistantPromptMessage(content=chunk), usage=None),
+                        )
 
             assert scratchpad.thought is not None
             scratchpad.thought = scratchpad.thought.strip() or "I am thinking about how to help you"
@@ -178,12 +214,16 @@ class CotAgentRunner(BaseAgentRunner, ABC):
                 llm_usage=usage_dict["usage"],
             )
 
-            if not scratchpad.is_final():
+            if not scratchpad.is_final() and not found_final_answer:
                 self.queue_manager.publish(
                     QueueAgentThoughtEvent(agent_thought_id=agent_thought.id), PublishFrom.APPLICATION_MANAGER
                 )
 
-            if not scratchpad.action:
+            if found_final_answer:
+                # Process the final answer
+                final_answer = accumulated_final_answer.strip()
+                function_call_state = False  # End the loop
+            elif not scratchpad.action:
                 # failed to extract action, return final answer directly
                 final_answer = ""
             else:
@@ -232,14 +272,16 @@ class CotAgentRunner(BaseAgentRunner, ABC):
 
             iteration_step += 1
 
-        yield LLMResultChunk(
-            model=model_instance.model,
-            prompt_messages=prompt_messages,
-            delta=LLMResultChunkDelta(
-                index=0, message=AssistantPromptMessage(content=final_answer), usage=llm_usage["usage"]
-            ),
-            system_fingerprint="",
-        )
+        # Stream the final answer text (if not already streamed)
+        if not found_final_answer:
+            yield LLMResultChunk(
+                model=model_instance.model,
+                prompt_messages=prompt_messages,
+                delta=LLMResultChunkDelta(
+                    index=0, message=AssistantPromptMessage(content=final_answer), usage=llm_usage["usage"]
+                ),
+                system_fingerprint="",
+            )
 
         # save agent thought
         self.save_agent_thought(
@@ -358,7 +400,11 @@ class CotAgentRunner(BaseAgentRunner, ABC):
         message = ""
         for scratchpad in agent_scratchpad:
             if scratchpad.is_final():
-                message += f"Final Answer: {scratchpad.agent_response}"
+                # Check if we already have a "Final Answer:" format
+                if scratchpad.agent_response and "Final Answer:" in scratchpad.agent_response:
+                    message += scratchpad.agent_response
+                else:
+                    message += f"Final Answer: {scratchpad.agent_response}"
             else:
                 message += f"Thought: {scratchpad.thought}\n\n"
                 if scratchpad.action_str:

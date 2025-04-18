@@ -67,7 +67,11 @@ class CotCompletionAgentRunner(CotAgentRunner):
         assistant_prompt = ""
         for unit in agent_scratchpad or []:
             if unit.is_final():
-                assistant_prompt += f"Final Answer: {unit.agent_response}"
+                # Check if we already have a "Final Answer:" format
+                if unit.agent_response and "Final Answer:" in unit.agent_response:
+                    assistant_prompt += unit.agent_response
+                else:
+                    assistant_prompt += f"Final Answer: {unit.agent_response}"
             else:
                 assistant_prompt += f"Thought: {unit.thought}\n\n"
                 if unit.action_str:

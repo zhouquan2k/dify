@@ -67,6 +67,10 @@ class CotAgentOutputParser:
         thought_cache = ""
         thought_str = "thought:"
         thought_idx = 0
+        
+        final_answer_cache = ""
+        final_answer_str = "final answer:"
+        final_answer_idx = 0
 
         last_character = ""
 
@@ -100,6 +104,39 @@ class CotAgentOutputParser:
                     code_block_delimiter_count = 0
 
                 if not in_code_block and not in_json:
+                    # Check for "Final Answer:" pattern
+                    if delta.lower() == final_answer_str[final_answer_idx] and final_answer_idx == 0:
+                        if last_character not in {"\n", " ", ""}:
+                            yield_delta = True
+                        else:
+                            last_character = delta
+                            final_answer_cache += delta
+                            final_answer_idx += 1
+                            if final_answer_idx == len(final_answer_str):
+                                # Yield the full "Final Answer:" text
+                                yield final_answer_cache
+                                final_answer_cache = ""
+                                final_answer_idx = 0
+                            index += steps
+                            continue
+                    elif delta.lower() == final_answer_str[final_answer_idx] and final_answer_idx > 0:
+                        last_character = delta
+                        final_answer_cache += delta
+                        final_answer_idx += 1
+                        if final_answer_idx == len(final_answer_str):
+                            # Yield the full "Final Answer:" text
+                            yield final_answer_cache
+                            final_answer_cache = ""
+                            final_answer_idx = 0
+                        index += steps
+                        continue
+                    else:
+                        if final_answer_cache:
+                            last_character = delta
+                            yield final_answer_cache
+                            final_answer_cache = ""
+                            final_answer_idx = 0
+                
                     if delta.lower() == action_str[action_idx] and action_idx == 0:
                         if last_character not in {"\n", " ", ""}:
                             yield_delta = True
@@ -218,3 +255,6 @@ class CotAgentOutputParser:
 
         if json_cache:
             yield parse_action(json_cache)
+            
+        if final_answer_cache:
+            yield final_answer_cache
