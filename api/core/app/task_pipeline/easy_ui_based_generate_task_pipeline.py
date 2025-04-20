@@ -317,6 +317,10 @@ class EasyUIBasedGenerateTaskPipeline(BasedGenerateTaskPipeline, MessageCycleMan
                 current_content += cast(str, delta_text)
                 self._task_state.llm_result.message.content = current_content
 
+                # 如果是 AgentMessageEvent 且消息有 message_type 属性，则保存到 task_state
+                if isinstance(event, QueueAgentMessageEvent) and hasattr(chunk.delta.message, 'message_type'):
+                    self._task_state.llm_result.message.message_type = chunk.delta.message.message_type
+
                 if isinstance(event, QueueLLMChunkEvent):
                     yield self._message_to_stream_response(
                         answer=cast(str, delta_text),
@@ -442,8 +446,16 @@ class EasyUIBasedGenerateTaskPipeline(BasedGenerateTaskPipeline, MessageCycleMan
         :param message_id: message id
         :return:
         """
+        # 检查消息中是否有 message_type
+        message_type = None
+        if hasattr(self._task_state.llm_result.message, 'message_type'):
+            message_type = self._task_state.llm_result.message.message_type
+            
         return AgentMessageStreamResponse(
-            task_id=self._application_generate_entity.task_id, id=message_id, answer=answer
+            task_id=self._application_generate_entity.task_id, 
+            id=message_id, 
+            answer=answer,
+            message_type=message_type
         )
 
     def _agent_thought_to_stream_response(self, event: QueueAgentThoughtEvent) -> Optional[AgentThoughtStreamResponse]:

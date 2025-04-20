@@ -29,7 +29,7 @@ $JSON_BLOB
 Observation: action result
 ... (repeat Thought/Action/Observation N times)
 Thought: I know what to respond
-Final Answer: Final response to human
+Final Answer: $(Final response to human)
 
 Begin! Reminder to ALWAYS use tools with valid json blobs if necessary. For your final response, use the format "Final Answer: your response" without json formatting. Format for tool usage is Action:```$JSON_BLOB```then Observation:.
 {{historic_messages}}
@@ -63,18 +63,29 @@ Provide only ONE action per $JSON_BLOB, as shown:
 
 Follow this format:
 
-Question: input question to answer
-Thought: consider previous and subsequent steps
+Question: (input question to answer)
+Thought: (consider previous and subsequent steps)
 Action:
 ```
 $JSON_BLOB
 ```
-Observation: action result
+Observation: (action result)
 ... (repeat Thought/Action/Observation N times)
-Thought: I know what to respond
-Final Answer: Final response to human
+Thought: (I know what to respond)
+Final Answer: (Final response to human)
 
-Begin! Reminder to ALWAYS use tools with valid json blobs if necessary. For your final response, use the format "Final Answer: your response" without json formatting. Format for tool usage is Action:```$JSON_BLOB```then Observation:.
+Begin! Please remember: there are only two allowed output formats:
+1. For tool usage: ALWAYS use tools with valid json blobs if necessary. use the exact format strictly:
+Action: 
+```$JSON_BLOB```  
+
+2. For your final response, use the exact format strictly: 
+Final Answer: 
+$FINAL_ANSWER
+
+
+
+
 """  # noqa: E501
 
 

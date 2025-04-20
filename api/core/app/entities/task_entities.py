@@ -174,6 +174,7 @@ class AgentMessageStreamResponse(StreamResponse):
     event: StreamEvent = StreamEvent.AGENT_MESSAGE
     id: str
     answer: str
+    message_type: Optional[str] = None
 
 
 class WorkflowStartStreamResponse(StreamResponse):

@@ -176,6 +176,7 @@ class AssistantPromptMessage(PromptMessage):
 
     role: PromptMessageRole = PromptMessageRole.ASSISTANT
     tool_calls: list[ToolCall] = []
+    message_type: Optional[str] = None  # 标识消息类型，例如："reason" 或 "answer"
 
     def is_empty(self) -> bool:
         """

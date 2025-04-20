@@ -26,6 +26,8 @@ from models.model import Message
 
 class CotAgentRunner(BaseAgentRunner, ABC):
     _is_first_iteration = True
+    _is_collecting_final_answer = False
+    _buffer = ""
     _ignore_observation_providers = ["wenxin"]
     _historic_prompt_messages: list[PromptMessage]
     _agent_scratchpad: list[AgentScratchpadUnit]
@@ -147,48 +149,71 @@ class CotAgentRunner(BaseAgentRunner, ABC):
                     scratchpad.action_str = json.dumps(chunk.model_dump())
                     scratchpad.action = action
                 else:
-                    # Check if chunk contains the start of a Final Answer
-                    if "Final Answer:" in chunk and not found_final_answer:
+                    # 将新的 chunk 添加到缓冲区
+                    self._buffer += chunk
+                    
+                    # 检查缓冲区是否包含 "Final Answer:"
+                    if "Final Answer:" in self._buffer and not self._is_collecting_final_answer:
+                        self._is_collecting_final_answer = True
+                        # 将缓冲区分为 thought 和 answer 部分
+                        final_answer_parts = self._buffer.split("Final Answer:", 1)
+                        
+                        # 重置缓冲区，只保留answer部分
+                        answer_part = final_answer_parts[1] if len(final_answer_parts) > 1 else ""
+                        self._buffer = ""
+                        
+                        # 设置答案并标记找到最终答案
+                        accumulated_final_answer = answer_part
                         found_final_answer = True
-                        # Extract the part after "Final Answer:"
-                        final_answer_parts = chunk.split("Final Answer:", 1)
-                        if len(final_answer_parts) > 1:
-                            # The text before "Final Answer:" is still thought
-                            thought_part = final_answer_parts[0]
-                            answer_part = final_answer_parts[1]
-                            
-                            # Add the thought part to the thought
-                            assert scratchpad.agent_response is not None
-                            scratchpad.agent_response += thought_part
-                            assert scratchpad.thought is not None
-                            scratchpad.thought += thought_part
-                            # Stream the thought part
+                        
+                        # 可以直接发送答案部分(如果有内容)
+                        if answer_part:
                             yield LLMResultChunk(
                                 model=self.model_config.model,
                                 prompt_messages=prompt_messages,
                                 system_fingerprint="",
-                                delta=LLMResultChunkDelta(index=0, message=AssistantPromptMessage(content=thought_part), usage=None),
+                                delta=LLMResultChunkDelta(
+                                    index=0, 
+                                    message=AssistantPromptMessage(
+                                        content=answer_part, 
+                                        message_type="answer"
+                                    ), 
+                                    usage=None
+                                ),
                             )
-                            
-                            # Start collecting the answer part
-                            accumulated_final_answer = answer_part
-                        else:
-                            # Unlikely, but handle the case where there's nothing after "Final Answer:"
-                            accumulated_final_answer = ""
-                    elif found_final_answer:
-                        # Continue collecting the final answer
+                    elif self._is_collecting_final_answer:
+                        # 如果正在收集最终答案，直接将 chunk 添加到答案中
                         accumulated_final_answer += chunk
+                        # 标记为 answer 类型
+                        yield LLMResultChunk(
+                            model=self.model_config.model,
+                            prompt_messages=prompt_messages,
+                            system_fingerprint="",
+                            delta=LLMResultChunkDelta(
+                                index=0, 
+                                message=AssistantPromptMessage(
+                                    content=chunk, 
+                                    message_type="answer"
+                                ), 
+                                usage=None
+                            ),
+                        )
                     else:
-                        # Normal thought processing
-                        assert scratchpad.agent_response is not None
+                        # 正常思考过程
                         scratchpad.agent_response += chunk
-                        assert scratchpad.thought is not None
                         scratchpad.thought += chunk
                         yield LLMResultChunk(
                             model=self.model_config.model,
                             prompt_messages=prompt_messages,
                             system_fingerprint="",
-                            delta=LLMResultChunkDelta(index=0, message=AssistantPromptMessage(content=chunk), usage=None),
+                            delta=LLMResultChunkDelta(
+                                index=0, 
+                                message=AssistantPromptMessage(
+                                    content=chunk, 
+                                    message_type="reason"
+                                ), 
+                                usage=None
+                            ),
                         )
 
             assert scratchpad.thought is not None
@@ -278,7 +303,12 @@ class CotAgentRunner(BaseAgentRunner, ABC):
                 model=model_instance.model,
                 prompt_messages=prompt_messages,
                 delta=LLMResultChunkDelta(
-                    index=0, message=AssistantPromptMessage(content=final_answer), usage=llm_usage["usage"]
+                    index=0, 
+                    message=AssistantPromptMessage(
+                        content=final_answer,
+                        message_type="answer"
+                    ), 
+                    usage=llm_usage["usage"]
                 ),
                 system_fingerprint="",
             )
@@ -300,7 +330,10 @@ class CotAgentRunner(BaseAgentRunner, ABC):
                 llm_result=LLMResult(
                     model=model_instance.model,
                     prompt_messages=prompt_messages,
-                    message=AssistantPromptMessage(content=final_answer),
+                    message=AssistantPromptMessage(
+                        content=final_answer,
+                        message_type="answer"
+                    ),
                     usage=llm_usage["usage"] or LLMUsage.empty_usage(),
                     system_fingerprint="",
                 )
