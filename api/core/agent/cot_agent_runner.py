@@ -151,6 +151,7 @@ class CotAgentRunner(BaseAgentRunner, ABC):
                 else:
                     # 将新的 chunk 添加到缓冲区
                     self._buffer += chunk
+                    scratchpad.agent_response += chunk
                     
                     # 检查缓冲区是否包含 "Final Answer:"
                     if "Final Answer:" in self._buffer and not self._is_collecting_final_answer:
@@ -200,7 +201,6 @@ class CotAgentRunner(BaseAgentRunner, ABC):
                         )
                     else:
                         # 正常思考过程
-                        scratchpad.agent_response += chunk
                         scratchpad.thought += chunk
                         yield LLMResultChunk(
                             model=self.model_config.model,
